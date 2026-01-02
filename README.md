@@ -10,26 +10,28 @@ A cycle-accurate implementation of a 32-bit RISC-V processor built from scratch 
 
 ### 1. Arithmetic Logic Unit (ALU)
 A pure combinational logic block handling all integer arithmetic and logical operations.
-* **Features:** 32-bit operations, Zero-flag generation for branching.
-* **Supported Ops:** ADD, SUB, AND, OR, XOR, SLT (Set Less Than).
+* **Inputs:** `inputA`, `inputB` (32-bit)
+* **Control:** `aluControl` (3-bit selector)
+* **Features:** Zero-flag generation (`zero`) for branch logic.
+* **Supported Ops:** ADD, SUB, AND, OR, XOR, SLT.
 
 **Verification:**
-The ALU was verified against a C++ testbench checking corner cases (overflow, zero outputs) and standard arithmetic.
+The ALU was verified against a C++ testbench checking corner cases and standard arithmetic.
 
-![ALU Waveform](images/alu.png)
+![ALU Waveform](regfile.png)
 *Figure 1: GTKWave trace demonstrating ALU operation switching between ADD (0x0) and SUB (0x1).*
 
 ### 2. Register File
 A standard 32x32-bit Register File.
-* **Architecture:** Dual Read Ports (rs1, rs2), Single Write Port (rd).
-* **Constraint:** Register `x0` is hardwired to 0 (Write attempts are ignored).
-* **Clocking:** Asynchronous Read, Synchronous Write.
+* **Read Ports:** `readAddress0`, `readAddress1` (Asynchronous)
+* **Write Port:** `writeAddress`, `writeData` (Synchronous on Clock)
+* **Constraint:** Register 0 is hardwired to 0. Reads from `5'b00000` always return `32'b0`.
 
 **Verification:**
 Verified read-after-write consistency and `x0` immutability.
 
-![Register File Waveform](images/regfile.png)
-*Figure 2: Waveform showing simultaneous reads and a synchronous write operation.*
+![Register File Waveform](alu.png)
+*Figure 2: Waveform showing simultaneous reads and a synchronous write operation (Writing 0xDEADBEEF to reg x1).*
 
 ---
 
