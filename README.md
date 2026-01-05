@@ -2,7 +2,7 @@
 
 A cycle-accurate implementation of a 32-bit RISC-V processor built from scratch in SystemVerilog. This project focuses on understanding the microarchitecture of the RV32I instruction set, verified using C++ testbenches via Verilator.
 
-**Current Status:** Epoch 1 Complete (ALU & Register File Verified)
+**Current Status:** Phase 1 In-Progress (ALU, Register File & Controller Verified)
 
 ---
 
@@ -18,8 +18,11 @@ A pure combinational logic block handling all integer arithmetic and logical ope
 **Verification:**
 The ALU was verified against a C++ testbench checking corner cases and standard arithmetic.
 
-![ALU Waveform](images/regfile.png)
+![ALU Waveform](images/alu.png)
 *Figure 1: GTKWave trace demonstrating ALU operation switching between ADD (0x0) and SUB (0x1).*
+
+![ALU Test Pass](images/alu_test_pass.png)
+*Figure 2: Console output showing all 7 ALU test cases passing successfully.*
 
 ### 2. Register File
 A standard 32x32-bit Register File.
@@ -30,14 +33,24 @@ A standard 32x32-bit Register File.
 **Verification Results:**
 Verified read-after-write consistency and `x0` immutability.
 
-![Register File Waveform](images/alu.png)
-*Figure 2: Waveform showing simultaneous reads and a synchronous write operation (Writing 0xDEADBEEF to reg x1).*
+![Register File Waveform](images/regfile.png)
+*Figure 3: Waveform showing simultaneous reads and a synchronous write operation (Writing 0xDEADBEEF to reg x1).*
 
-Automated self-checking testbenches verify correct integer arithmetic and register behavior.
+### 3. Main Controller (Decoder)
+The "Brain" of the CPU, implementing a two-stage decoder for RISC-V instructions.
+* **Inputs:** `opcode`, `funct3`, `funct7` (Sliced from instruction word).
+* **Outputs:** Control signals for Datapath (`registerWriteEnable`, `aluInputSource`, etc.) and ALU (`aluControlSignal`).
+* **Logic:** Pure combinational logic mapping RV32I opcodes to hardware control lines.
 
-![Unit Test Pass](images/unit_test_pass.png)
+**Verification:**
+Verified correct decoding of R-Type, I-Type, Load, Store, and Branch instructions using a C++ testbench.
 
-*Figure 3: Console output showing all 7 ALU test cases passing successfully.*
+![Controller Waveform](images/controller.png)
+*Figure 4: GTKWave trace showing the Controller decoding opcodes into control signals.*
+
+![Controller Test Pass](images/controller_test_pass.png)
+*Figure 5: Automated verification of the Controller decoding logic (ADD, SUB, LW, SW, BEQ).*
+
 ---
 
 ## 🚀 How to Run
@@ -60,3 +73,6 @@ chmod +x run.sh
 
 # 3. Run the Register File Testbench
 ./run.sh regfile
+
+# 4. Run the Controller Testbench
+./run.sh controller
