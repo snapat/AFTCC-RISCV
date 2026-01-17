@@ -2,13 +2,16 @@ module controller (
 input logic [6:0] opcode,
 input logic [2:0] funct3,
 input logic [6:0] funct7,
+input logic       timerInterrupt, // Interrupt signal from the hardware timer
 
 output logic registerWriteEnable,
 output logic aluInputSource,        //0 = Register B, 1 = Immediate
 output logic memoryWriteEnable,
 output logic resultSource,          // 0 = ALU Result, 1 = Memory Data
 output logic isBranch,              // Controls 
-output logic [2:0] aluControlSignal
+output logic [2:0] aluControlSignal,
+output logic csrWriteEnable,        // Enables writing to the CSR (MEPC)
+output logic isTrap                 // Selector for PC Mux to jump to Trap Vector
 );
 
 
@@ -17,74 +20,87 @@ output logic [2:0] aluControlSignal
 
     // --- 1. MAIN DECODER ---
     always_comb begin
-        // Default values
+        // Default values (Safety)
         registerWriteEnable = 0;
         aluInputSource      = 0;
         memoryWriteEnable   = 0;
         resultSource        = 0;
         isBranch            = 0;
-        aluOperationCategory = 2'b00; 
+        aluOperationCategory = 2'b00;
+        
+        // NEW: Interrupt Defaults
+        csrWriteEnable      = 0;
+        isTrap              = 0;
 
-        case (opcode)
-            // R-Type (Math with Registers)
-            7'b0110011: begin
-                registerWriteEnable = 1;
-                aluInputSource      = 0; 
-                memoryWriteEnable   = 0;
-                resultSource        = 0;
-                isBranch            = 0;
-                aluOperationCategory = 2'b10; // Look at funct3
-            end
-
-            // I-Type (Math with Constants)
-            7'b0010011: begin
-                registerWriteEnable = 1;
-                aluInputSource      = 1;      // Use Immediate
-                memoryWriteEnable   = 0;
-                resultSource        = 0;
-                isBranch            = 0;
-                aluOperationCategory = 2'b10; // Look at funct3
-            end
-
-            // Load Word (LW)
-            7'b0000011: begin
-                registerWriteEnable = 1;
-                aluInputSource      = 1;      // Add Offset
-                memoryWriteEnable   = 0;
-                resultSource        = 1;      // From Memory
-                isBranch            = 0;
-                aluOperationCategory = 2'b00; // Force ADD
-            end
-
-            // Store Word (SW)
-            7'b0100011: begin
-                registerWriteEnable = 0;
-                aluInputSource      = 1;      // Add Offset
-                memoryWriteEnable   = 1;      // Write RAM
-                resultSource        = 0;
-                isBranch            = 0;
-                aluOperationCategory = 2'b00; // Force ADD
-            end
-
-            // Branch Equal (BEQ)
-            7'b1100011: begin
-                registerWriteEnable = 0;
-                aluInputSource      = 0;
-                memoryWriteEnable   = 0;
-                resultSource        = 0;
-                isBranch            = 1;
-                aluOperationCategory = 2'b01; // Force SUB
-            end
-            
-            default: begin
-                registerWriteEnable = 0;
-                aluInputSource      = 0;
-                memoryWriteEnable   = 0;
-                resultSource        = 0;
-                isBranch            = 0;
-                aluOperationCategory = 2'b00;
-            end
-        endcase
+        // NEW: Priority Logic for Preemption
+        if (timerInterrupt) begin
+            // INTERRUPT STATE: Hijack the CPU
+            isTrap              = 1; // Force PC to jump to 0x10
+            csrWriteEnable      = 1; // Save current PC to MEPC
+            // All other write enables remain 0 (Safe)
+        end else begin
+            // NORMAL OPERATION
+            case (opcode)
+                // R-Type (Math with Registers)
+                7'b0110011: begin
+                    registerWriteEnable = 1;
+                    aluInputSource      = 0; 
+                    memoryWriteEnable   = 0;
+                    resultSource        = 0;
+                    isBranch            = 0;
+                    aluOperationCategory = 2'b10; // Look at funct3
+                end
+    
+                // I-Type (Math with Constants)
+                7'b0010011: begin
+                    registerWriteEnable = 1;
+                    aluInputSource      = 1;      // Use Immediate
+                    memoryWriteEnable   = 0;
+                    resultSource        = 0;
+                    isBranch            = 0;
+                    aluOperationCategory = 2'b10; // Look at funct3
+                end
+    
+                // Load Word (LW)
+                7'b0000011: begin
+                    registerWriteEnable = 1;
+                    aluInputSource      = 1;      // Add Offset
+                    memoryWriteEnable   = 0;
+                    resultSource        = 1;      // From Memory
+                    isBranch            = 0;
+                    aluOperationCategory = 2'b00; // Force ADD
+                end
+    
+                // Store Word (SW)
+                7'b0100011: begin
+                    registerWriteEnable = 0;
+                    aluInputSource      = 1;      // Add Offset
+                    memoryWriteEnable   = 1;      // Write RAM
+                    resultSource        = 0;
+                    isBranch            = 0;
+                    aluOperationCategory = 2'b00; // Force ADD
+                end
+    
+                // Branch Equal (BEQ)
+                7'b1100011: begin
+                    registerWriteEnable = 0;
+                    aluInputSource      = 0;
+                    memoryWriteEnable   = 0;
+                    resultSource        = 0;
+                    isBranch            = 1;
+                    aluOperationCategory = 2'b01; // Force SUB
+                end
+                
+                default: begin
+                    registerWriteEnable = 0;
+                    aluInputSource      = 0;
+                    memoryWriteEnable   = 0;
+                    resultSource        = 0;
+                    isBranch            = 0;
+                    aluOperationCategory = 2'b00;
+                end
+            endcase
+        end
     end
 
     // --- 2. ALU DECODER ---
@@ -104,7 +120,7 @@ output logic [2:0] aluControlSignal
                     end
                     
                     // SLT (Set Less Than)
-                    // RISC-V funct3 is 010, Your ALU code is 101
+                    // RISC-V funct3 is 010,  ALU code is 101
                     3'b010: aluControlSignal = 3'b101; 
 
                     // OR
