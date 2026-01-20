@@ -52,6 +52,8 @@ The waveform below demonstrates the "Reflex" action of the CPU:
 
 ![Phase 3 Reflex](images/reflex_proof.png)
 
+> **Note:** Current simulation uses a verification hex file to exercise the PC jump logic. Full C-based RTOS scheduler integration is the final milestone.
+
 ---
 
 ##  How to Run
