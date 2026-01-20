@@ -1,26 +1,26 @@
 module controller (
-input logic [6:0] opcode,
-input logic [2:0] funct3,
-input logic [6:0] funct7,
-input logic       timerInterrupt, // Interrupt signal from the hardware timer
+    input logic [6:0] opcode,
+    input logic [2:0] funct3,
+    input logic [6:0] funct7,
+    input logic       timerInterrupt, // signal from the hardware timer
 
-output logic registerWriteEnable,
-output logic aluInputSource,        //0 = Register B, 1 = Immediate
-output logic memoryWriteEnable,
-output logic resultSource,          // 0 = ALU Result, 1 = Memory Data
-output logic isBranch,              // Controls 
-output logic [2:0] aluControlSignal,
-output logic csrWriteEnable,        // Enables writing to the CSR (MEPC)
-output logic isTrap                 // Selector for PC Mux to jump to Trap Vector
+    output logic registerWriteEnable,
+    output logic aluInputSource,        // 0 = reg b, 1 = immediate
+    output logic memoryWriteEnable,
+    output logic resultSource,          // 0 = alu result, 1 = memory data
+    output logic isBranch,              // tells pc to swap to branch target
+    output logic [2:0] aluControlSignal,
+    output logic csrWriteEnable,        // saves pc to mepc when we trap
+    output logic isTrap,                // forces pc to 0x10 (trap vector)
+    output logic isReturn               // forces pc to mepc (return from trap)
 );
 
-
-    // Internal Signal: Tells the ALU Decoder what broad category of math to do
+    // helps us group instructions so we don't have to write 100 if-statements
     logic [1:0] aluOperationCategory;
 
-    // --- 1. MAIN DECODER ---
+    // main decoder
     always_comb begin
-        // Default values (Safety)
+        // set defaults (reset everything to 0 so we don't accidentally latch)
         registerWriteEnable = 0;
         aluInputSource      = 0;
         memoryWriteEnable   = 0;
@@ -28,113 +28,130 @@ output logic isTrap                 // Selector for PC Mux to jump to Trap Vecto
         isBranch            = 0;
         aluOperationCategory = 2'b00;
         
-        // NEW: Interrupt Defaults
+        // interrupt defaults
         csrWriteEnable      = 0;
         isTrap              = 0;
+        isReturn            = 0; // default: we are not returning
 
-        // NEW: Priority Logic for Preemption
+        // priority logic (the timer is the boss)
         if (timerInterrupt) begin
-            // INTERRUPT STATE: Hijack the CPU
-            isTrap              = 1; // Force PC to jump to 0x10
-            csrWriteEnable      = 1; // Save current PC to MEPC
-            // All other write enables remain 0 (Safe)
+            // timer triggered: drop everything and jump to the handler
+            isTrap              = 1; // mux selector: jump to 0x10
+            csrWriteEnable      = 1; // save where we were (pc) into mepc
+            // note: we don't write to regs or memory here, just save state
         end else begin
-            // NORMAL OPERATION
+            // normal mode: decode the opcode like usual
             case (opcode)
-                // R-Type (Math with Registers)
+                // r-type (math with two registers, like add x1, x2, x3)
                 7'b0110011: begin
-                    registerWriteEnable = 1;
-                    aluInputSource      = 0; 
+                    registerWriteEnable = 1; // we are writing back a result
+                    aluInputSource      = 0; // use register b
                     memoryWriteEnable   = 0;
-                    resultSource        = 0;
+                    resultSource        = 0; // result comes from alu
                     isBranch            = 0;
-                    aluOperationCategory = 2'b10; // Look at funct3
+                    aluOperationCategory = 2'b10; // check funct3/7 later
                 end
     
-                // I-Type (Math with Constants)
+                // i-type (math with a constant, like addi x1, x2, 5)
                 7'b0010011: begin
                     registerWriteEnable = 1;
-                    aluInputSource      = 1;      // Use Immediate
+                    aluInputSource      = 1; // use the immediate value
                     memoryWriteEnable   = 0;
                     resultSource        = 0;
                     isBranch            = 0;
-                    aluOperationCategory = 2'b10; // Look at funct3
+                    aluOperationCategory = 2'b10; // check funct3 later
                 end
     
-                // Load Word (LW)
+                // load word (lw x1, offset(x2))
                 7'b0000011: begin
-                    registerWriteEnable = 1;
-                    aluInputSource      = 1;      // Add Offset
+                    registerWriteEnable = 1; // need to save the data we read
+                    aluInputSource      = 1; // calculate address (reg + imm)
                     memoryWriteEnable   = 0;
-                    resultSource        = 1;      // From Memory
+                    resultSource        = 1; // result comes from memory (ram)
                     isBranch            = 0;
-                    aluOperationCategory = 2'b00; // Force ADD
+                    aluOperationCategory = 2'b00; // force add logic
                 end
     
-                // Store Word (SW)
+                // store word (sw x1, offset(x2))
                 7'b0100011: begin
-                    registerWriteEnable = 0;
-                    aluInputSource      = 1;      // Add Offset
-                    memoryWriteEnable   = 1;      // Write RAM
+                    registerWriteEnable = 0; // not saving anything to registers
+                    aluInputSource      = 1; // calculate address
+                    memoryWriteEnable   = 1; // write to ram
                     resultSource        = 0;
                     isBranch            = 0;
-                    aluOperationCategory = 2'b00; // Force ADD
+                    aluOperationCategory = 2'b00; // force add logic
                 end
     
-                // Branch Equal (BEQ)
+                // branch equal (beq x1, x2, label)
                 7'b1100011: begin
                     registerWriteEnable = 0;
-                    aluInputSource      = 0;
+                    aluInputSource      = 0; // compare two registers
                     memoryWriteEnable   = 0;
                     resultSource        = 0;
-                    isBranch            = 1;
-                    aluOperationCategory = 2'b01; // Force SUB
+                    isBranch            = 1; // tell pc logic to check zero flag
+                    aluOperationCategory = 2'b01; // force sub logic (to compare)
                 end
                 
-                default: begin
+                // new: system instructions (mret)
+                // opcode 1110011 is for environment calls / breaks / returns
+                7'b1110011: begin
                     registerWriteEnable = 0;
                     aluInputSource      = 0;
                     memoryWriteEnable   = 0;
                     resultSource        = 0;
                     isBranch            = 0;
                     aluOperationCategory = 2'b00;
+                    
+                    // we assume it's mret because we aren't supporting ecall yet.
+                    // this signal tells the pc mux to load from mepc.
+                    isReturn = 1; 
+                end
+
+                default: begin
+                    // unknown instruction? do nothing.
+                    registerWriteEnable = 0;
+                    aluInputSource      = 0;
+                    memoryWriteEnable   = 0;
+                    resultSource        = 0;
+                    isBranch            = 0;
+                    aluOperationCategory = 2'b00;
+                    isReturn            = 0;
                 end
             endcase
         end
     end
 
-    // --- 2. ALU DECODER ---
+    // alu decoder
+    // this part figures out the specific math operation
     always_comb begin
         case (aluOperationCategory)
-            2'b00: aluControlSignal = 3'b000; // Force ADD (LW/SW)
-            2'b01: aluControlSignal = 3'b001; // Force SUB (BEQ)
+            2'b00: aluControlSignal = 3'b000; // force add (used for lw/sw)
+            2'b01: aluControlSignal = 3'b001; // force sub (used for beq)
             
             2'b10: begin 
+                // it's a "real" math instruction, look at funct3
                 case (funct3)
-                    // ADD or SUB
+                    // add or sub
                     3'b000: begin
+                        // if it's r-type and funct7 has the bit, it's sub
                         if (opcode == 7'b0110011 && funct7[5]) 
-                            aluControlSignal = 3'b001; // SUB
+                            aluControlSignal = 3'b001; // sub
                         else 
-                            aluControlSignal = 3'b000; // ADD
+                            aluControlSignal = 3'b000; // add
                     end
                     
-                    // SLT (Set Less Than)
-                    // RISC-V funct3 is 010,  ALU code is 101
-                    3'b010: aluControlSignal = 3'b101; 
-
-                    // OR
-                    // RISC-V funct3 is 110, Your ALU code is 011
-                    3'b110: aluControlSignal = 3'b011; 
-
-                    // AND
-                    // RISC-V funct3 is 111, Your ALU code is 010
-                    3'b111: aluControlSignal = 3'b010; 
-
-                    // XOR 
-                    // RISC-V funct3 is 100, Your ALU code is 100
+                    // slt (set less than)
+                    3'b010: aluControlSignal = 3'b101;
+                    
+                    // or
+                    3'b110: aluControlSignal = 3'b011;
+                    
+                    // and
+                    3'b111: aluControlSignal = 3'b010;
+                    
+                    // xor 
                     3'b100: aluControlSignal = 3'b100;
-
+                    
                     default: aluControlSignal = 3'b000;
                 endcase
             end

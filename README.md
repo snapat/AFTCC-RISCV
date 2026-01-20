@@ -1,50 +1,60 @@
-# 32-bit RISC-V Core (SystemVerilog)
+# 32-bit RISC-V Preemptive Multitasking Core
 
-A cycle-accurate implementation of a 32-bit RISC-V processor built from scratch in SystemVerilog. This project focuses on High-Performance Embedded Computing (HPEC) and Hardware-Software Integration (HSI), featuring a custom preemptive multitasking architecture verified using C++ testbenches via Verilator.
+A cycle-accurate implementation of a 32-bit RISC-V processor built from scratch in SystemVerilog. This project demonstrates **Hardware-Enforced Preemptive Multitasking** on a bare-metal Single-Cycle architecture.
 
-**Current Status:** Phase 2 Complete (SoC Integration & Hardware Interrupts Verified)
-
----
-
-## 📸 The "Reflex" Verification (Phase 2)
-The critical milestone for Phase 2 was verifying the **Hardware-Based Preemption**.
-
-**The Proof:**
-The waveform below demonstrates the "Handshake" between the Timer and the Controller.
-* **Condition:** `timerInterrupt` goes HIGH.
-* **Reaction:** `programCounter` immediately vectors to `0x00000020` (The Trap Handler) instead of the next instruction.
-* **State:** The CPU effectively "hijacks" the fetch stage to enforce a context switch.
-
-![Phase 2 Reflex](images/reflex_proof.png)
-*(Note: Capture a zoomed-in screenshot of `clk`, `pc`, `timerInterrupt`, and `instr` and save it as `images/reflex_proof.png`)*
+**Current Status:** Phase 3 Complete (Hardware Interrupts & Context Switching Verified)
 
 ---
 
-## 🏗 Architecture Modules
+##  Architectural Philosophy & Trade-offs
+This core was designed with specific constraints to prioritize architectural clarity and atomic instruction execution.
+
+### 1. The "Preemptive-Lite" Scheduler
+* **Mechanism:** Uses a custom hardware timer that triggers a trap (`timerInterrupt`) every 50 clock cycles.
+* **Policy:** Implements a **Round-Robin** scheduler in software.
+* **Why Round-Robin?** While simple, it provides deterministic task switching and ensures fairness (anti-starvation), which is critical for verifying the hardware interrupt logic without the complexity of priority queues.
+
+### 2. The "Zero-Wait" Combinational Bus
+* **Design:** A custom memory interface modeled on the **AXI-Lite Topology** (separate Read/Write Address & Data channels).
+* **The Trade-off:** Standard AXI-Lite uses a `VALID`/`READY` handshake which introduces wait states.
+* **The Solution:** To maintain a strict **CPI = 1 (Single-Cycle)** performance without complex stall logic in the controller, the `READY` signal is effectively tied HIGH. This creates a high-performance combinational path where memory transactions are atomic and instantaneous.
+
+### 3. Atomic Interrupt Handling
+* **Why Single-Cycle?** In pipelined architectures, interrupts require flushing instructions in Fetch/Decode stages.
+* **This Core:** Because every instruction completes in exactly one cycle, interrupts are **Atomic**. The processor effectively "finishes" the current instruction and traps to the OS vector (`0x10`) on the exact same clock edge, ensuring the architectural state is never inconsistent.
+
+---
+
+##  System Modules
 
 ### 1. SoC Top (System-on-Chip)
-The integration layer connecting the CPU "Organs" to the "Skeleton".
-* **Components:** CPU Core, Instruction Memory (ROM), Data Memory (RAM), GPIO, and Timer.
-* **Features:**
-    * **Bus Interconnect:** Simple router for Memory and I/O traffic.
-    * **Preemption Timer:** A hardware counter that triggers an interrupt every 50 cycles (simulation) to enable preemptive multitasking.
-* **Memory Architecture:** Split Instruction (ROM) and Data (RAM) memory to avoid structural hazards (Harvard Architecture).
+The integration layer connecting the CPU to the "Outside World".
+* **Memory Architecture:** Physically split Instruction (ROM) and Data (RAM) blocks to prevent **Structural Hazards** during simultaneous Fetch and Load/Store operations.
+* **Preemption Timer:** A hardware "heartbeat" that enforces the time slice. It asserts `timerInterrupt` when `timerCount >= TIMER_LIMIT` (50 cycles).
 
-### 2. Main Controller (Decoder & Reflex)
-The "Brain" of the CPU, updated to handle **Exceptional Control Flow**.
-* **Inputs:** `opcode`, `funct3`, `funct7`, `timerInterrupt`.
-* **Outputs:** Control signals for Datapath and CSR Write Enable.
-* **Interrupt Logic:** Handles the hardware vectoring to the trap handler (`0x10`) when `timerInterrupt` is high.
+### 2. The Controller (The Brain)
+Updated to support the **Trap & Return** lifecycle.
+* **Trap Vectoring:** When `isTrap` is asserted, the PC Multiplexer forcibly jumps to `0x00000010` while simultaneously saving the current address to the `mepc` (Machine Exception PC) CSR.
+* **Return Logic:** Decodes the `mret` instruction to restore `PC <= mepc`, resuming the user program exactly where it left off.
 
-### 3. Legacy Modules (Phase 1)
-* **ALU:** Pure combinational logic handling ADD, SUB, AND, OR, XOR, SLT.
-* **Register File:** Standard 32x32-bit Register File (x0 hardwired to 0).
-
-*(Previous verification images archived in `old_sim/`)*
+### 3. Bus Interconnect
+* **Topology:** Multi-Master capable (CPU + DMA support logic).
+* **Arbitration:** Fixed-priority arbitration logic is present to allow future DMA expansion, though the current demo prioritizes CPU traffic to guarantee instruction fetch timing.
 
 ---
 
-## 🚀 How to Run
+##  Verification (Phase 3)
+
+The waveform below demonstrates the "Reflex" action of the CPU:
+1.  **Trigger:** `timerInterrupt` goes HIGH.
+2.  **Response:** The PC effectively "hijacks" the next fetch, jumping to `0x10` (Trap Handler).
+3.  **Restoration:** After the scheduler runs, `mret` restores the PC to the saved address.
+
+![Phase 3 Reflex](images/reflex_proof.png)
+
+---
+
+##  How to Run
 
 This project uses **Verilator** for fast C++ based simulation and **GTKWave** for debugging.
 
@@ -59,7 +69,7 @@ A unified build script `run.sh` handles compilation and execution.
 # 1. Make the script executable
 chmod +x run.sh
 
-# 2. Run the Full SoC Simulation (Phase 2)
+# 2. Run the Full SoC Simulation
 ./run.sh soc_top
 
 # 3. View the Waveform

@@ -18,7 +18,10 @@ module soc_top(
     logic [31:0] mepcValue;
     logic        registerWriteEnable, memoryWriteEnable, aluInputSource, resultSource, isBranch, zeroFlag;
     logic        ramWriteValid, csrWriteEnable, isTrap;
+    logic        isReturn;
     logic [2:0]  aluControl;
+    logic        ioWriteValid;
+    logic [31:0] ioWriteData;
 
     // --- PREEMPTION HARDWARE ---
     logic [31:0] timerCount;
@@ -42,6 +45,7 @@ module soc_top(
 
     // --- 1. PC LOGIC ---
     assign nextProgramCounter = isTrap ? 32'h00000010 : 
+                                isReturn ? mepcValue :
                                (isBranch & zeroFlag) ? (programCounter + immediateValue) : 
                                (programCounter + 4);
     
@@ -60,7 +64,7 @@ module soc_top(
         .timerInterrupt(timerInterrupt), .registerWriteEnable(registerWriteEnable), 
         .aluInputSource(aluInputSource), .memoryWriteEnable(memoryWriteEnable), 
         .resultSource(resultSource), .isBranch(isBranch), 
-        .aluControlSignal(aluControl), .csrWriteEnable(csrWriteEnable), .isTrap(isTrap)
+        .aluControlSignal(aluControl), .csrWriteEnable(csrWriteEnable), .isTrap(isTrap), .isReturn(isReturn)
     );
 
     imm_gen u_imm_gen (.instruction(instruction), .immediateValue(immediateValue));
@@ -110,8 +114,8 @@ module soc_top(
         .ramAxiReadData(ramReadData), .ramAxiReadValidData(1'b1), .ramAxiReadReadyData(),
 
         // SLAVE: IO (All pins mapped & tied)
-        .ioAxiWriteAddress(), .ioAxiWriteValid(), .ioAxiWriteReady(1'b1),
-        .ioAxiWriteData(), .ioAxiWriteValidData(), .ioAxiWriteReadyData(1'b1),
+        .ioAxiWriteAddress(), .ioAxiWriteValid(ioWriteValid), .ioAxiWriteReady(1'b1),
+        .ioAxiWriteData(ioWriteData), .ioAxiWriteValidData(), .ioAxiWriteReadyData(1'b1),
         .ioAxiReadAddress(), .ioAxiReadValid(), .ioAxiReadReady(1'b1),
         .ioAxiReadData(32'b0), .ioAxiReadValidData(1'b1), .ioAxiReadReadyData()
     );
@@ -122,7 +126,16 @@ module soc_top(
         .ramAxiWriteValid(ramWriteValid), .ramAxiReadAddress(ramAddress), .ramAxiReadData(ramReadData)
     );
 
+    // 12.5MHz Clock / 115200 Baud = 108 Clocks per bit
+    uart_tx #(.CLKS_PER_BIT(108)) u_uart (
+        .i_Clk(cpuClock),
+        .i_Tx_DV(ioWriteValid),       // Trigger when bus writes to 0x40000000
+        .i_Tx_Byte(ioWriteData[7:0]), // Send the byte
+        .i_Tx_Active(),
+        .o_Tx_Serial(uartTransmit),
+        .o_Tx_Done()
+    );
+
     assign debugLeds = programCounter[9:2];
-    assign uartTransmit = 1'b1;
 
 endmodule
