@@ -150,7 +150,7 @@ The project utilizes `Make` for build automation and `Verilator` for high-speed 
 
 ```bash
 # 1. Clone the repository
-git clone [https://github.com/snapat/AFTCC-RISCV.git](https://github.com/snapat/AFTCC-RISCV.git)
+git clone [https://github.com/snapat/Reflex-V](https://github.com/snapat/Reflex-V)
 
 # 2. Compile Firmware & Simulate SoC
 ./run.sh soc_top
