@@ -22,37 +22,60 @@ The following simulation output demonstrates the core's ability to handle **hard
 The SoC features a custom **Harvard Architecture** utilizing a decoupled AXI-Lite interconnect. The design emphasizes **Hardware/Software Co-Design**, exposing low-level system events directly to the firmware via a strict Memory-Mapped I/O (MMIO) interface.
 
 ```mermaid
+# RISC-V Preemptive Multitasking SoC
+
+![Verification](https://img.shields.io/badge/Verification-Passing-success?style=for-the-badge&logo=githubactions)
+![Simulation](https://img.shields.io/badge/Simulation-Verilator-blue?style=for-the-badge&logo=cplusplus)
+![Language](https://img.shields.io/badge/RTL-SystemVerilog-orange?style=for-the-badge)
+![Architecture](https://img.shields.io/badge/ISA-RISC--V_rv32i-lightgrey?style=for-the-badge)
+
+> **A synthesized, cycle-accurate 32-bit RISC-V processor implementing hardware-enforced preemptive multitasking and a custom bare-metal kernel.**
+
+---
+
+## System Demonstration: Preemptive Task Switching
+The following simulation output demonstrates the core's ability to handle **hardware-triggered context switches**. The system timer forces a trap every 2,000 clock cycles, causing the kernel to preempt the current thread (`Task A`) and schedule the next ready thread (`Task B`) deterministically.
+
+![Context Switch Demo](images/demo_switch.gif)
+*(Figure 1: Real-time kernel scheduler operation within the Verilator simulation environment)*
+
+---
+
+## System Architecture
+
+The SoC features a custom **Harvard Architecture** utilizing a decoupled AXI-Lite interconnect. The design emphasizes **Hardware/Software Co-Design**, exposing low-level system events directly to the firmware via a strict Memory-Mapped I/O (MMIO) interface.
+
+```mermaid
 %%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#ffffff', 'primaryTextColor': '#000000', 'primaryBorderColor': '#000000', 'lineColor': '#000000', 'secondaryColor': '#f4f4f4', 'tertiaryColor': '#ffffff'}}}%%
 graph LR
     %% --- STYLING ---
-    %% Professional Engineering Pastel Palette
     classDef cpu fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000;
     classDef bus fill:#fff9c4,stroke:#fbc02d,stroke-width:2px,color:#000;
     classDef mem fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#000;
     classDef periph fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000;
     classDef critical stroke:#d32f2f,stroke-width:3px,color:#d32f2f;
 
-    %% --- 1. CPU CORE (The Master) ---
+    %% --- 1. CPU CORE ---
     subgraph CPU [CPU Core]
         direction TB
         PC[Program<br/>Counter]:::cpu
         Ctrl[Control<br/>Unit]:::cpu
-        CSR[CSR Unit<br/>(MEPC)]:::cpu
+        CSR[CSR Unit - MEPC]:::cpu
         Reg[Register<br/>File]:::cpu
         ALU[ALU]:::cpu
     end
 
-    %% --- 2. BUS INTERCONNECT (The Hub) ---
+    %% --- 2. BUS ---
     Bus((AXI-Lite<br/>Bus)):::bus
 
-    %% --- 3. MEMORY (Slaves) ---
+    %% --- 3. MEMORY ---
     subgraph MEM [Memory]
         direction TB
         ROM[Instruction<br/>ROM]:::mem
         RAM[Data<br/>RAM]:::mem
     end
 
-    %% --- 4. PERIPHERALS (Slaves) ---
+    %% --- 4. PERIPHERALS ---
     subgraph IO [Peripherals]
         direction TB
         Timer[System<br/>Timer]:::periph
@@ -61,33 +84,31 @@ graph LR
 
     %% --- CONNECTIONS ---
     
-    %% A. The "Red" Preemption Loop (Hardware -> Software)
+    %% A. Preemption Loop (Critical Path)
     Timer ==>|Interrupt| Ctrl:::critical
     Ctrl -.->|Trap Force| PC:::critical
     CSR ==>|Restore PC| PC:::critical
 
-    %% B. Instruction Fetch (The Cycle Start)
+    %% B. Fetch
     PC -->|Fetch Addr| ROM
     ROM -->|Instruction| Ctrl
 
-    %% C. CPU Internal Datapath
+    %% C. Datapath
     Ctrl -->|Control| ALU
     Ctrl -->|Control| Reg
     Reg -->|Op A| ALU
-    
-    %% FIX: Added ALU Feedback loop (Standard R-Type Instruction)
     ALU -->|Result| Reg
 
-    %% D. CPU to Bus Interface
+    %% D. Bus Interface
     Reg -->|Write Data| Bus
     ALU -->|Address| Bus
 
-    %% E. Bus Routing (Master -> Slave)
+    %% E. Routing
     Bus -->|Addr/Data| RAM
     Bus -->|Addr/Data| UART
     Bus -->|Addr/Data| CSR
 
-    %% F. Read Returns (Slave -> Master)
+    %% F. Read Returns
     RAM -.->|Read Data| Bus
     ROM -.->|Const Data| Bus
     CSR -.->|Read Data| Bus
