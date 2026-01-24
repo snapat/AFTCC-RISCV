@@ -150,7 +150,7 @@ The project utilizes `Make` for build automation and `Verilator` for high-speed 
 
 ```bash
 # 1. Clone the repository
-git clone [https://github.com/snapat/Reflex-V](https://github.com/snapat/Reflex-V)
+git clone [https://github.com/snapat/Reflex-V.git](https://github.com/snapat/Reflex-V.git)
 
 # 2. Compile Firmware & Simulate SoC
 ./run.sh soc_top
