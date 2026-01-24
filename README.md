@@ -1,4 +1,4 @@
-# Reflex-V: RISC-V (RV32I) Preemptive RTOS
+# Reflex-V: RISC-V (RV32I) SoC with Preemptive RTOS
 
 ![Verification](https://img.shields.io/badge/Verification-Passing-success?style=for-the-badge&logo=githubactions)
 ![Simulation](https://img.shields.io/badge/Simulation-Verilator-blue?style=for-the-badge&logo=cplusplus)
