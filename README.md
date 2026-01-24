@@ -22,14 +22,14 @@ The following simulation output demonstrates the core's ability to handle **hard
 The SoC features a custom **Harvard Architecture** utilizing a decoupled AXI-Lite interconnect. The design emphasizes **Hardware/Software Co-Design**, exposing low-level system events directly to the firmware via a strict Memory-Mapped I/O (MMIO) interface.
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'lineColor': '#000000', 'textColor': '#000000', 'clusterBkg': '#ffffff', 'clusterBorder': '#000000', 'titleColor': '#000000'}}}%%
 graph LR
-    %% --- HIGH CONTRAST STYLING ---
-    %% Heavier borders and more saturated colors for better visibility
-    classDef cluster fill:#EEEEEE,stroke:#424242,stroke-width:2px;
-    classDef cpu fill:#90CAF9,stroke:#0D47A1,stroke-width:2px,color:#000000;
-    classDef bus fill:#FFF59D,stroke:#F57F17,stroke-width:2px,color:#000000;
-    classDef slave fill:#A5D6A7,stroke:#1B5E20,stroke-width:2px,color:#000000;
-    classDef critical stroke:#D50000,stroke-width:4px,color:#000000;
+    %% --- STYLING ---
+    classDef cluster fill:#ffffff,stroke:#000000,stroke-width:2px,color:#000000;
+    classDef cpu fill:#bbdefb,stroke:#0d47a1,stroke-width:2px,color:#000000;
+    classDef bus fill:#fff9c4,stroke:#fbc02d,stroke-width:2px,color:#000000;
+    classDef slave fill:#c8e6c9,stroke:#1b5e20,stroke-width:2px,color:#000000;
+    classDef critical stroke:#d50000,stroke-width:4px,color:#000000;
 
     %% --- LEFT COLUMN: CPU CORE ---
     subgraph CPU [CPU Core]
@@ -42,7 +42,6 @@ graph LR
     end
 
     %% --- CENTER COLUMN: BUS ---
-    %% "(( ))" Creates the circle shape
     Bus((AXI-Lite<br/>Bus)):::bus
 
     %% --- RIGHT COLUMN: SLAVES ---
@@ -57,7 +56,6 @@ graph LR
     %% --- CONNECTIONS ---
     
     %% 1. Critical Loops (Interrupts)
-    %% thick links "==>" emphasize the preemption path
     Timer ==>|IRQ| Controller:::critical
     Controller -.->|Trap 0x10| PC:::critical
     CSR ==>|mepc| PC:::critical
