@@ -22,61 +22,67 @@ The following simulation output demonstrates the core's ability to handle **hard
 The SoC features a custom **Harvard Architecture** utilizing a decoupled AXI-Lite interconnect. The design emphasizes **Hardware/Software Co-Design**, exposing low-level system events directly to the firmware via a strict Memory-Mapped I/O (MMIO) interface.
 
 ```mermaid
-graph TD
-    %% --- STYLING ---
-    classDef cluster fill:#f9f9f9,stroke:#333,stroke-width:2px;
-    classDef cpu fill:#e3f2fd,stroke:#1565c0,stroke-width:2px;
-    classDef bus fill:#fffde7,stroke:#fbc02d,stroke-width:2px;
-    classDef slave fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
-    classDef critical stroke:#d32f2f,stroke-width:3px;
+graph LR
+    %% --- HIGH CONTRAST STYLING ---
+    %% Heavier borders and more saturated colors for better visibility
+    classDef cluster fill:#EEEEEE,stroke:#424242,stroke-width:2px;
+    classDef cpu fill:#90CAF9,stroke:#0D47A1,stroke-width:2px,color:#000000;
+    classDef bus fill:#FFF59D,stroke:#F57F17,stroke-width:2px,color:#000000;
+    classDef slave fill:#A5D6A7,stroke:#1B5E20,stroke-width:2px,color:#000000;
+    classDef critical stroke:#D50000,stroke-width:4px,color:#000000;
 
-    %% --- 1. PERIPHERALS ---
-    subgraph PERIPHERALS [Peripherals]
-        Timer[Hardware Timer]:::slave
-        UART[UART TX]:::slave
-    end
-
-    %% --- 2. CPU CORE ---
+    %% --- LEFT COLUMN: CPU CORE ---
     subgraph CPU [CPU Core]
         direction TB
-        Controller[Control Unit]:::cpu
-        PC[Program Counter]:::cpu
-        RegFile[Register File]:::cpu
-        ALU[Arithmetic Logic Unit]:::cpu
-        CSR[CSR Unit / MEPC]:::cpu
+        PC[PC]:::cpu
+        Controller[Controller]:::cpu
+        CSR[CSR Unit]:::cpu
+        RegFile[RegFile]:::cpu
+        ALU[ALU]:::cpu
     end
 
-    %% --- 3. THE BUS ---
-    Bus((AXI-Lite<br/>Interconnect)):::bus
+    %% --- CENTER COLUMN: BUS ---
+    %% "(( ))" Creates the circle shape
+    Bus((AXI-Lite<br/>Bus)):::bus
 
-    %% --- 4. MEMORY ---
-    subgraph MEMORY [Physical Memory]
-        ROM[Instruction ROM]:::slave
-        RAM[Data RAM]:::slave
+    %% --- RIGHT COLUMN: SLAVES ---
+    subgraph SLAVES [Memory & I/O]
+        direction TB
+        ROM[ROM]:::slave
+        RAM[RAM]:::slave
+        UART[UART]:::slave
+        Timer[Timer]:::slave
     end
 
     %% --- CONNECTIONS ---
-    PC -->|Fetch Address| ROM
-    ROM -->|Instruction Word| Controller
+    
+    %% 1. Critical Loops (Interrupts)
+    %% thick links "==>" emphasize the preemption path
+    Timer ==>|IRQ| Controller:::critical
+    Controller -.->|Trap 0x10| PC:::critical
+    CSR ==>|mepc| PC:::critical
 
-    %% Data Path
-    RegFile -->|Operand A| ALU
-    RegFile -->|Operand B| Bus
-    ALU -->|Address/Result| Bus
+    %% 2. Fetch & Decode
+    PC -->|Addr| ROM
+    ROM -->|Instr| Controller
 
-    %% CRITICAL INTERRUPT PATH
-    Timer ==>|timerInterrupt| Controller:::critical
-    Controller -.->|Force Trap Vector 0x10| PC:::critical
-    CSR ==>|mepc Restore| PC:::critical
+    %% 3. Datapath Execution
+    Controller -->|Ctrl| ALU
+    Controller -->|Ctrl| RegFile
+    RegFile -->|OpA| ALU
+    RegFile -->|OpB| Bus
+    ALU -->|Addr| Bus
 
-    %% Bus Routing
-    Bus -->|Write Payload| RAM
-    Bus -->|Write Payload| UART
-    Bus -->|Write Payload| CSR
-    RAM -.->|Read Data| Bus
-    ROM -.->|Const Data| Bus
-    CSR -.->|Read Data| Bus
-    Bus -.->|Bus Read Return| RegFile
+    %% 4. Bus Writes
+    Bus -->|Write| RAM
+    Bus -->|Write| UART
+    Bus -->|Write| CSR
+
+    %% 5. Bus Reads
+    RAM -.->|Read| Bus
+    ROM -.->|Const| Bus
+    Bus -.->|Data| RegFile
+    CSR -.->|Read| Bus
 ```
 
 ---
