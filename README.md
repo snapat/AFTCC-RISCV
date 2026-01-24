@@ -134,7 +134,6 @@ The core was validated using a multi-layered verification strategy, progressing 
 To validate the atomicity of the preemption mechanism, simulation traces were analyzed to measure the cycle-accurate response of the Control Unit.
 
 ![Before Interrupt Waveform](images/BeforeInterrupt.png)
-![After Interrupt Waveform](images/AfterInterrupt.png)
 
 > **Trace Analysis:**
 > 1.  **Event Trigger:** `timerCount` reaches the comparator threshold.
