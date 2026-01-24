@@ -19,7 +19,7 @@ The following simulation output demonstrates the core's ability to handle **hard
 
 ## System Architecture
 
-The SoC features a custom **Harvard Architecture** utilizing a decoupled AXI-Lite interconnect. The design emphasizes **Hardware/Software Co-Design**, exposing low-level system events directly to the firmware via a strict Memory-Mapped I/O (MMIO) interface.
+The SoC features a **Modified Harvard Architecture**, utilizing a dedicated high-speed path for instruction fetching and a custom **Split-Channel Combinational Bus** for data access. This "Zero-Wait" topology adopts the decoupled Read/Write channel design of AXI4-Lite but simplifies the handshake mechanism to single-cycle logic for maximum IPC.
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#ffffff', 'primaryTextColor': '#000000', 'primaryBorderColor': '#000000', 'lineColor': '#000000', 'secondaryColor': '#f4f4f4', 'tertiaryColor': '#ffffff'}}}%%
@@ -42,16 +42,16 @@ graph LR
     end
 
     %% --- 2. BUS ---
-    Bus((AXI-Lite<br/>Bus)):::bus
+    %% Renamed to be technically accurate
+    Bus((Split-Channel<br/>Bus)):::bus
 
-    %% --- 3. MEMORY ---
+    %% --- 3. SLAVES ---
     subgraph MEM [Memory]
         direction TB
         ROM[Instruction<br/>ROM]:::mem
         RAM[Data<br/>RAM]:::mem
     end
 
-    %% --- 4. PERIPHERALS ---
     subgraph IO [Peripherals]
         direction TB
         Timer[System<br/>Timer]:::periph
@@ -60,34 +60,35 @@ graph LR
 
     %% --- CONNECTIONS ---
     
-    %% A. Preemption Loop (Critical Path)
+    %% A. The Harvard Fetch Path (Direct - NOT via Bus)
+    PC --------------------->|Fetch Addr| ROM
+    ROM -------------------->|Instruction| Ctrl
+
+    %% B. Preemption Loop (Critical Path)
     Timer ==>|Interrupt| Ctrl:::critical
     Ctrl -.->|Trap Force| PC:::critical
     CSR ==>|Restore PC| PC:::critical
-
-    %% B. Fetch
-    PC -->|Fetch Addr| ROM
-    ROM -->|Instruction| Ctrl
 
     %% C. Datapath
     Ctrl -->|Control| ALU
     Ctrl -->|Control| Reg
     Reg -->|Op A| ALU
+    
+    %% Internal Feedback (Standard R-Type)
     ALU -->|Result| Reg
 
-    %% D. Bus Interface
+    %% D. Decoupled Bus Writes (Separate Channel)
     Reg -->|Write Data| Bus
-    ALU -->|Address| Bus
+    ALU -->|Write Addr| Bus
+    Bus -->|Write| RAM
+    Bus -->|Write| UART
+    Bus -->|Write| CSR
 
-    %% E. Routing
-    Bus -->|Addr/Data| RAM
-    Bus -->|Addr/Data| UART
-    Bus -->|Addr/Data| CSR
-
-    %% F. Read Returns
-    RAM -.->|Read Data| Bus
-    ROM -.->|Const Data| Bus
-    CSR -.->|Read Data| Bus
+    %% E. Decoupled Bus Reads (Separate Channel)
+    ALU -->|Read Addr| Bus
+    RAM -.->|Read| Bus
+    ROM -.->|Const| Bus
+    CSR -.->|Read| Bus
     Bus -.->|Bus Return| Reg
 ```
 
