@@ -5,7 +5,7 @@
 ![Language](https://img.shields.io/badge/RTL-SystemVerilog-orange?style=for-the-badge)
 ![Architecture](https://img.shields.io/badge/ISA-RISC--V_rv32i-lightgrey?style=for-the-badge)
 
-> **A synthesized, cycle-accurate 32-bit RISC-V processor implementing hardware-enforced preemptive multitasking and a custom bare-metal kernel.**
+> **A cycle-accurate 32-bit RISC-V processor implementing hardware-enforced preemptive multitasking and a custom bare-metal kernel.**
 
 ---
 
