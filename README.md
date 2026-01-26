@@ -149,6 +149,8 @@ To validate the atomicity of the preemption mechanism, simulation traces were an
 The project utilizes `Make` for build automation and `Verilator` for high-speed cycle-accurate simulation.
 
 ```bash
+# Required: Verilator, GTKWave
+
 # 1. Clone the repository
 git clone [https://github.com/snapat/Reflex-V.git](https://github.com/snapat/Reflex-V.git)
 
